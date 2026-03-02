@@ -100,6 +100,96 @@ export default function Map() {
     fill.position.set(-20, 20, -30);
     scene.add(fill);
 
+    // ── MYSTICAL EMBERS ───────────────────────────────────────────────────────
+    const EMBER_COUNT = 900;
+
+    // Per-particle typed arrays (much faster than object arrays)
+    const ePos   = new Float32Array(EMBER_COUNT * 3); // world positions
+    const eVel   = new Float32Array(EMBER_COUNT * 3); // velocities
+    const eCol   = new Float32Array(EMBER_COUNT * 3); // rendered colours (alpha baked in)
+    const eBase  = new Float32Array(EMBER_COUNT * 3); // base colour before alpha
+    const eSz    = new Float32Array(EMBER_COUNT);     // base sizes
+    const eLife  = new Float32Array(EMBER_COUNT);     // elapsed lifetime (s)
+    const eMax   = new Float32Array(EMBER_COUNT);     // total lifetime (s)
+
+    // Colour palette: deep space blues · electric cyan · nebula violet · ice white
+    const PALETTE = [
+      new THREE.Color(0x00aaff), // electric blue
+      new THREE.Color(0x00ffee), // neon cyan
+      new THREE.Color(0x4466ff), // deep cobalt
+      new THREE.Color(0x88aaff), // soft periwinkle
+      new THREE.Color(0xcc88ff), // nebula violet
+      new THREE.Color(0xaaeeff), // ice shimmer
+    ];
+
+    const resetEmber = (i: number, scatterStart = false) => {
+      const angle  = Math.random() * Math.PI * 2;
+      const radius = Math.sqrt(Math.random()) * 46; // sqrt gives even disk spread
+      ePos[i*3]   = Math.cos(angle) * radius;
+      ePos[i*3+1] = scatterStart ? Math.random() * 8 : 0.05 + Math.random() * 0.3;
+      ePos[i*3+2] = Math.sin(angle) * radius;
+
+      // Slow mystical rise with very gentle horizontal drift
+      eVel[i*3]   = (Math.random() - 0.5) * 0.18;
+      eVel[i*3+1] = 0.18 + Math.random() * 0.52;
+      eVel[i*3+2] = (Math.random() - 0.5) * 0.18;
+
+      eMax[i]  = 7.0 + Math.random() * 9.0;
+      eLife[i] = scatterStart ? Math.random() * eMax[i] : 0;
+      eSz[i]   = 0.06 + Math.random() * 0.22;
+
+      const c = PALETTE[Math.floor(Math.random() * PALETTE.length)].clone();
+      c.multiplyScalar(0.75 + Math.random() * 0.5); // slight brightness variation
+      eBase[i*3]   = c.r;
+      eBase[i*3+1] = c.g;
+      eBase[i*3+2] = c.b;
+      eCol[i*3]    = c.r;
+      eCol[i*3+1]  = c.g;
+      eCol[i*3+2]  = c.b;
+    };
+
+    // Initialise — stagger lifetimes so particles don't all burst at once
+    for (let i = 0; i < EMBER_COUNT; i++) resetEmber(i, true);
+
+    const emberGeo = new THREE.BufferGeometry();
+    const emberPosAttr  = new THREE.BufferAttribute(ePos,  3);
+    const emberColAttr  = new THREE.BufferAttribute(eCol,  3);
+    const emberSzAttr   = new THREE.BufferAttribute(eSz,   1);
+    emberGeo.setAttribute('position', emberPosAttr);
+    emberGeo.setAttribute('color',    emberColAttr);
+    emberGeo.setAttribute('size',     emberSzAttr);
+
+    // Soft glowing disc sprite — drawn on a canvas so no texture file needed
+    const spriteCanvas = document.createElement('canvas');
+    spriteCanvas.width = spriteCanvas.height = 64;
+    const sCtx = spriteCanvas.getContext('2d')!;
+    const grd  = sCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    // Bright white-blue core → electric cyan → deep violet halo → transparent
+    grd.addColorStop(0,    'rgba(220,240,255,1.0)');  // near-white ice core
+    grd.addColorStop(0.15, 'rgba(80,200,255,0.95)');  // electric sky blue
+    grd.addColorStop(0.38, 'rgba(40,100,255,0.55)');  // deep cobalt ring
+    grd.addColorStop(0.60, 'rgba(120,60,255,0.20)');  // violet nebula haze
+    grd.addColorStop(0.82, 'rgba(0,20,80,0.06)');     // deep space edge
+    grd.addColorStop(1,    'rgba(0,0,0,0)');
+    sCtx.fillStyle = grd;
+    sCtx.fillRect(0, 0, 64, 64);
+    const spriteTex = new THREE.CanvasTexture(spriteCanvas);
+
+    const emberMat = new THREE.PointsMaterial({
+      size:            0.5,   // slightly larger for a softer glow presence
+      map:             spriteTex,
+      vertexColors:    true,
+      transparent:     true,
+      opacity:         1.0,
+      blending:        THREE.AdditiveBlending,
+      depthWrite:      false,
+      sizeAttenuation: true,
+    });
+
+    const emberPoints = new THREE.Points(emberGeo, emberMat);
+    emberPoints.renderOrder = 1; // draw after opaque geometry
+    scene.add(emberPoints);
+
     // ── RESIZE ────────────────────────────────────────────────────────────────
     const onResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
@@ -413,6 +503,38 @@ export default function Map() {
 
       if (armatures.length > 0) applyCharTransform();
 
+      // ── UPDATE EMBERS ───────────────────────────────────────────────────────
+      for (let i = 0; i < EMBER_COUNT; i++) {
+        eLife[i] += dt;
+        if (eLife[i] >= eMax[i]) { resetEmber(i, false); continue; }
+
+        const t = eLife[i] / eMax[i]; // 0 = just born, 1 = dying
+
+        // Slow sinusoidal horizontal wobble — lazy, dreamlike drift
+        const wobble = Math.sin(eLife[i] * 1.1 + i * 0.37) * 0.006;
+
+        ePos[i*3]   += (eVel[i*3]   + wobble) * dt;
+        ePos[i*3+1] += eVel[i*3+1] * dt * (1 - t * 0.15); // barely decelerates
+        ePos[i*3+2] += (eVel[i*3+2] + wobble) * dt;
+
+        // Fade: gentle fade-in → long luminous hold → slow fade-out
+        const alpha = t < 0.10
+          ? t / 0.10
+          : t > 0.75
+            ? 1 - (t - 0.75) / 0.25
+            : 1.0;
+
+        eCol[i*3]   = eBase[i*3]   * alpha;
+        eCol[i*3+1] = eBase[i*3+1] * alpha;
+        eCol[i*3+2] = eBase[i*3+2] * alpha;
+
+        // Smooth size taper — no flicker, just slow shrink
+        eSz[i] = eSz[i] * 0.998 + (0.04 + 0.14 * (1 - t)) * 0.002;
+      }
+      emberPosAttr.needsUpdate = true;
+      emberColAttr.needsUpdate = true;
+      emberSzAttr.needsUpdate  = true;
+
       // Third-person camera
       const eyeY   = charPos.y + charH * 0.55;
       const lookAt = new THREE.Vector3(charPos.x, eyeY, charPos.z);
@@ -555,6 +677,9 @@ export default function Map() {
       joystickZone?.removeEventListener('touchstart', onJoyTouchStart);
 
       renderer.dispose();
+      emberGeo.dispose();
+      emberMat.dispose();
+      spriteTex.dispose();
       if (container.contains(canvas)) container.removeChild(canvas);
     };
   }, []);
