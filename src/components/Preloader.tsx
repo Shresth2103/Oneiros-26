@@ -13,6 +13,8 @@ export default function Preloader({ onComplete }: PreloaderProps) {
 
     const handleComplete = useCallback(() => {
         setFadeOut(true);
+        // Dispatch event to Map.tsx so it knows to show the HUD / joystick
+        window.dispatchEvent(new Event('start-experience'));
         setTimeout(() => {
             onComplete();
         }, 500); // matches CSS transition duration

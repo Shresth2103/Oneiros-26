@@ -41,53 +41,54 @@ export default function App() {
       )}
 
       {/* ── MAIN EXPERIENCE ───────────────────────────────────────────────── */}
-      {/* Both Map and Navbar mount only after the preloader finishes.        */}
-      {preloaderDone && (
-        <>
-          {/* Three.js 3D world — fills the full viewport at z-index 2 */}
-          <Map />
+      {/* 
+        Three.js 3D world — fills the full viewport at z-index 2 
+        Loads immediately in the background behind the z-index 999
+        Preloader so WebGL shaders compile concurrently!
+      */}
+      <Map />
 
-          {/* Page overlay — shown when a nav link is clicked */}
-          {activePage && pageComponents[activePage] && (
-            <div style={{
+      {/* Page overlay — shown when a nav link is clicked */}
+      {activePage && pageComponents[activePage] && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 30,
+          background: 'rgba(0,0,0,0.92)',
+          overflowY: 'auto',
+        }}>
+          <button
+            onClick={() => setActivePage(null)}
+            style={{
               position: 'fixed',
-              inset: 0,
-              zIndex: 30,
-              background: 'rgba(0,0,0,0.92)',
-              overflowY: 'auto',
-            }}>
-              <button
-                onClick={() => setActivePage(null)}
-                style={{
-                  position: 'fixed',
-                  top: 20,
-                  right: 24,
-                  zIndex: 60,
-                  background: 'rgba(255,255,255,0.1)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  color: '#fff',
-                  fontSize: 22,
-                  width: 40,
-                  height: 40,
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(8px)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                aria-label="Close"
-              >
-                ✕
-              </button>
-              {pageComponents[activePage]}
-            </div>
-          )}
-
-          {/* Navbar — fixed at top, z-index 50 (above canvas and HUD) */}
-          <Navbar onNavigate={(page) => setActivePage(page || null)} />
-        </>
+              top: 20,
+              right: 24,
+              zIndex: 60,
+              background: 'rgba(255,255,255,0.1)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              color: '#fff',
+              fontSize: 22,
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              cursor: 'pointer',
+              backdropFilter: 'blur(8px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+          {pageComponents[activePage]}
+        </div>
       )}
+
+      {/* Navbar — fixed at top, z-index 50 (above canvas and HUD).
+          We also load this immediately to fetch its imagery.
+      */}
+      <Navbar onNavigate={(page) => setActivePage(page || null)} />
     </div>
   );
 }
