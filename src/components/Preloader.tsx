@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import './Preloader.css';
 import preloaderVidDesktop from '../assets/intro_enhanced.webm';
+import CosmicBackground from './CosmicBackground';
 
 interface PreloaderProps {
     onComplete: () => void;
@@ -40,6 +41,12 @@ export default function Preloader({ onComplete }: PreloaderProps) {
             });
         }
 
+        // Pre-fetch heavy 3D models immediately into the browser's disk cache
+        // so that GLTFLoader doesn't block the main thread waiting for a massive 10MB network request
+        // exactly 1.2s into the video.
+        fetch('/map.glb', { priority: 'high' }).catch(() => { });
+        fetch('/character.glb', { priority: 'low' }).catch(() => { });
+
         // Safety fallback timer in case 'onEnded' doesn't fire
         const fallbackTimer = setTimeout(handleComplete, 15000);
 
@@ -50,6 +57,8 @@ export default function Preloader({ onComplete }: PreloaderProps) {
 
     return (
         <div className={`preloader-container ${fadeOut ? 'fade-out' : ''}`}>
+            <CosmicBackground />
+
             <video
                 ref={videoRef}
                 autoPlay
