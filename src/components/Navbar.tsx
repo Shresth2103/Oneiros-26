@@ -7,10 +7,16 @@ interface NavbarProps {
 
 export default function Navbar({ onNavigate }: NavbarProps) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const navMenuId = 'primary-navigation';
 
     const toggleMobileMenu = useCallback(() => {
         setIsMobileMenuOpen(prev => !prev);
     }, []);
+
+    const handleHomeClick = useCallback(() => {
+        setIsMobileMenuOpen(false);
+        onNavigate?.('');
+    }, [onNavigate]);
 
     const handleNavClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>, page: string) => {
         e.preventDefault();
@@ -20,29 +26,32 @@ export default function Navbar({ onNavigate }: NavbarProps) {
 
     return (
         <nav className="cosmos-navbar font-manrope">
-            <div className="cosmos-nav-logo mobile-logo" onClick={() => onNavigate?.('')} style={{ cursor: 'pointer' }}>
+            <button type="button" className="cosmos-nav-logo mobile-logo nav-logo-btn" onClick={handleHomeClick} aria-label="Go to home">
                 <img src="/oneiros-logo.png" alt="ONEIROS" className="logo-img" />
-            </div>
+            </button>
 
             <button
+                type="button"
                 className={`mobile-menu-btn ${isMobileMenuOpen ? 'open' : ''}`}
                 onClick={toggleMobileMenu}
                 aria-label="Toggle Navigation"
+                aria-expanded={isMobileMenuOpen}
+                aria-controls={navMenuId}
             >
                 <span className="hamburger-line"></span>
                 <span className="hamburger-line"></span>
                 <span className="hamburger-line"></span>
             </button>
 
-            <div className={`nav-links-container ${isMobileMenuOpen ? 'mobile-visible' : ''}`}>
+            <div id={navMenuId} className={`nav-links-container ${isMobileMenuOpen ? 'mobile-visible' : ''}`}>
                 <ul className="cosmos-nav-links left-links">
                     <li><a href="#about" onClick={(e) => handleNavClick(e, 'about')} className="font-medium tracking-[0.1em]">ABOUT</a></li>
                     <li><a href="#events" onClick={(e) => handleNavClick(e, 'events')} className="font-medium tracking-[0.1em]">EVENTS</a></li>
                     <li><a href="#gallery" onClick={(e) => handleNavClick(e, 'gallery')} className="font-medium tracking-[0.1em]">GALLERY</a></li>
                 </ul>
-                <div className="cosmos-nav-logo desktop-logo" onClick={() => onNavigate?.('')} style={{ cursor: 'pointer' }}>
+                <button type="button" className="cosmos-nav-logo desktop-logo nav-logo-btn" onClick={handleHomeClick} aria-label="Go to home">
                     <img src="/oneiros-logo.png" alt="ONEIROS" className="logo-img" />
-                </div>
+                </button>
                 <ul className="cosmos-nav-links right-links">
                     <li><a href="#schedule" onClick={(e) => handleNavClick(e, 'schedule')} className="font-medium tracking-[0.1em]">SCHEDULE</a></li>
                     <li><a href="#sponsors" onClick={(e) => handleNavClick(e, 'sponsors')} className="font-medium tracking-[0.1em]">SPONSORS</a></li>

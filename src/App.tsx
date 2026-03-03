@@ -8,6 +8,7 @@ import Sponsors from './components/Sponsors';
 import Contact from './components/Contact';
 import Gallery from './components/Gallery';
 import Schedule from './components/Schedule';
+import './App.css';
 
 /**
  * Rendering order (z-index stack):
@@ -31,8 +32,7 @@ export default function App() {
   };
 
   return (
-    // Root: fixed, full viewport, black background
-    <div style={{ position: 'fixed', inset: 0, background: '#000' }}>
+    <div className="app-root">
 
       {/* ── PRELOADER (video + progress bar) ─────────────────────────────── */}
       {/* Stays mounted until onComplete fires, then fades out and unmounts */}
@@ -50,33 +50,10 @@ export default function App() {
 
       {/* Page overlay — shown when a nav link is clicked */}
       {activePage && pageComponents[activePage] && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 30,
-          background: 'rgba(0,0,0,0.92)',
-          overflowY: 'auto',
-        }}>
+        <div className="page-overlay">
           <button
             onClick={() => setActivePage(null)}
-            style={{
-              position: 'fixed',
-              top: 20,
-              right: 24,
-              zIndex: 60,
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#fff',
-              fontSize: 22,
-              width: 40,
-              height: 40,
-              borderRadius: '50%',
-              cursor: 'pointer',
-              backdropFilter: 'blur(8px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            className="page-overlay-close"
             aria-label="Close"
           >
             ✕

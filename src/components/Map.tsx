@@ -1,37 +1,32 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-
-// ─── CONSTANTS (matching original main.js exactly) ────────────────────────────
-const GROUND_Y = 0;
-const BOUNDARY_RADIUS = 54;
-const WALK_SPEED = 8;
-const RUN_SPEED = 18;
-const TURN_SPEED = 12;
-const CAM_DIST_DEFAULT = 22;
-const CAM_DIST_MIN = 3;
-const CAM_DIST_MAX = 40;
-const CAM_PITCH_MIN = 0.02;
-const CAM_PITCH_MAX = 1.4;
-const CAM_SMOOTH = 0.14;
-const CAM_MAX_RADIUS = 57;
-const SPRINT_THRESHOLD = 0.72;
-
-// ─── INTERACTIVE MARKERS ──────────────────────────────────────────────────────
-const MARKER_INTERACT_RADIUS = 6;   // distance to show prompt
-const MARKER_ACTIVATE_RADIUS = 4;   // distance where E / tap activates
-const MARKER_DEFS: { page: string; label: string; pos: [number, number, number]; color: number }[] = [
-  { page: 'about',   label: 'About',        pos: [  3,   0, -44  ], color: 0x00ffee },
-  { page: 'events',  label: 'Major Events',  pos: [ 46.3, 0,  -7.4], color: 0xff6ef9 },
-  { page: 'events',  label: 'Minor Events',  pos: [-49.2, 0, -18.2], color: 0xcc44ff },
-  { page: 'gallery', label: 'Artist',        pos: [-48.3, 0,  22.0], color: 0xffcc00 },
-];
-
-const STATE_IDLE = 0;
-const STATE_RUN = 1;
-const STATE_WALK = 2;
-const STATE_NAMES = ['Idle', 'Run', 'Walk'];
-const STATE_COLORS = ['#4fffaa', '#ff7c4f', '#ffe566'];
+import { createMovementKeys, updateMovementKey } from './map/input';
+import { createMarkerPrompt, createSceneMarkers, setMarkerPromptState } from './map/markers';
+import { enableMeshShadows, fixMapMaterials, loadGLB, type LoadedGLTF } from './map/loading';
+import {
+  BOUNDARY_RADIUS,
+  CAM_DIST_DEFAULT,
+  CAM_DIST_MAX,
+  CAM_DIST_MIN,
+  CAM_MAX_RADIUS,
+  CAM_PITCH_MAX,
+  CAM_PITCH_MIN,
+  CAM_SMOOTH,
+  GROUND_Y,
+  MARKER_ACTIVATE_RADIUS,
+  MARKER_DEFS,
+  MARKER_INTERACT_RADIUS,
+  RUN_SPEED,
+  SPRINT_THRESHOLD,
+  STATE_COLORS,
+  STATE_IDLE,
+  STATE_NAMES,
+  STATE_RUN,
+  STATE_WALK,
+  TURN_SPEED,
+  WALK_SPEED,
+} from './map/config';
 
 interface MapProps {
   onNavigate?: (page: string) => void;
@@ -39,12 +34,19 @@ interface MapProps {
 
 export default function Map({ onNavigate }: MapProps) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const onNavigateRef = useRef(onNavigate);
-  onNavigateRef.current = onNavigate;
+  const onNavigateRef = useRef<MapProps['onNavigate']>(onNavigate);
+
+  useEffect(() => {
+    onNavigateRef.current = onNavigate;
+  }, [onNavigate]);
 
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return;
+    const isDev = import.meta.env.DEV;
+    const logDev = (...args: unknown[]) => {
+      if (isDev) console.log(...args);
+    };
 
     // ── UI DOM REFS ────────────────────────────────────────────────────────────
     const stateEl = document.getElementById('state') as HTMLElement | null;
@@ -217,89 +219,9 @@ export default function Map({ onNavigate }: MapProps) {
     scene.add(emberPoints);
 
     // ── INTERACTIVE 3D MARKERS ─────────────────────────────────────────────────
-    // Build a prompt overlay element
-    const markerPrompt = document.createElement('div');
-    markerPrompt.id = 'marker-prompt';
-    markerPrompt.style.cssText = `
-      position: fixed;
-      bottom: 120px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 45;
-      padding: 12px 28px;
-      border-radius: 14px;
-      background: rgba(0,0,0,0.72);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,255,255,0.18);
-      color: #fff;
-      font-family: 'Inter', system-ui, sans-serif;
-      font-size: 15px;
-      letter-spacing: 0.4px;
-      text-align: center;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.25s ease;
-      white-space: nowrap;
-    `;
-    document.body.appendChild(markerPrompt);
-
-    // Create 3D marker objects
-    type MarkerRuntime = {
-      page: string;
-      label: string;
-      pos: THREE.Vector3;
-      color: number;
-      group: THREE.Group;
-      ring: THREE.Mesh;
-      pillar: THREE.Mesh;
-      glow: THREE.PointLight;
-      baseY: number;
-    };
-
-    const markers: MarkerRuntime[] = [];
+    const markerPrompt = createMarkerPrompt();
+    const { markers, ringGeo, pillarGeo } = createSceneMarkers(scene, MARKER_DEFS);
     let activeMarkerIdx = -1; // index of the marker the player is close to
-
-    const ringGeo = new THREE.TorusGeometry(1.2, 0.08, 16, 48);
-    const pillarGeo = new THREE.CylinderGeometry(0.06, 0.06, 4, 8);
-
-    for (const def of MARKER_DEFS) {
-      const col = new THREE.Color(def.color);
-
-      const group = new THREE.Group();
-      group.position.set(def.pos[0], def.pos[1], def.pos[2]);
-
-      // Glowing vertical pillar
-      const pillarMat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.45 });
-      const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-      pillar.position.y = 2;
-      group.add(pillar);
-
-      // Horizontal spinning ring
-      const ringMat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.8 });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = 3.5;
-      group.add(ring);
-
-      // Point light for local glow on surrounding geometry
-      const glow = new THREE.PointLight(def.color, 2, 12);
-      glow.position.y = 2.5;
-      group.add(glow);
-
-      scene.add(group);
-
-      markers.push({
-        page: def.page,
-        label: def.label,
-        pos: new THREE.Vector3(def.pos[0], def.pos[1], def.pos[2]),
-        color: def.color,
-        group,
-        ring,
-        pillar,
-        glow,
-        baseY: def.pos[1],
-      });
-    }
 
     // E-key handler for marker activation
     const onMarkerActivate = () => {
@@ -551,34 +473,29 @@ export default function Map({ onNavigate }: MapProps) {
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
+    const onOrientationChange = () => setTimeout(onResize, 100);
+    const onWheel = (e: WheelEvent) => {
+      camDist = clampCamDist(camDist + e.deltaY * 0.02);
+    };
+
     window.addEventListener('resize', onResize);
     // Orientation change fires before innerWidth/Height updates on iOS
-    window.addEventListener('orientationchange', () => setTimeout(onResize, 100));
+    window.addEventListener('orientationchange', onOrientationChange);
 
     // ── KEYBOARD INPUT ────────────────────────────────────────────────────────
-    const keys = { w: false, a: false, s: false, d: false, shift: false };
+    const keys = createMovementKeys();
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.w = true;
-      if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.a = true;
-      if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.s = true;
-      if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.d = true;
-      if (e.key === 'Shift') keys.shift = true;
+      updateMovementKey(keys, e.key, true);
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.w = false;
-      if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.a = false;
-      if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.s = false;
-      if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.d = false;
-      if (e.key === 'Shift') keys.shift = false;
+      updateMovementKey(keys, e.key, false);
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
     // ── SCROLL ZOOM ───────────────────────────────────────────────────────────
-    window.addEventListener('wheel', (e: WheelEvent) => {
-      camDist = clampCamDist(camDist + e.deltaY * 0.02);
-    }, { passive: true });
+    window.addEventListener('wheel', onWheel, { passive: true });
 
     // ── MOUSE DRAG (all on window — avoids React event blocking) ─────────────
     let isDragging = false;
@@ -735,10 +652,10 @@ export default function Map({ onNavigate }: MapProps) {
     window.addEventListener('touchcancel', onTouchEndCancel, { passive: true });
 
     // ── CHARACTER STATE (3-armature system from main.js) ──────────────────────
-    let armatures: THREE.Object3D[] = [];
-    let mixers: THREE.AnimationMixer[] = [];
+    const armatures: THREE.Object3D[] = [];
+    const mixers: THREE.AnimationMixer[] = [];
     let stateIdx = STATE_IDLE;
-    let charPos = new THREE.Vector3(0, GROUND_Y, 0);
+    const charPos = new THREE.Vector3(0, GROUND_Y, 0);
     let charRotY = 0;
     let charH = 1.8;
 
@@ -758,27 +675,6 @@ export default function Map({ onNavigate }: MapProps) {
         arm.position.copy(charPos);
         arm.rotation.y = charRotY;
       }
-    };
-
-    // ── MAP MATERIAL FIX (from main.js) ──────────────────────────────────────
-    const fixMapMaterials = (gltfScene: THREE.Object3D) => {
-      gltfScene.traverse((node: any) => {
-        if (!node.isMesh) return;
-        const n: string = node.name.toLowerCase();
-
-        if (n === 'sphere' || n.includes('sky')) {
-          node.visible = false; // Hide the baked-in white sky dome
-        } else if (n === 'building' || n === 'plane.002') {
-          const mats: THREE.Material[] = Array.isArray(node.material)
-            ? node.material : [node.material];
-          mats.forEach(mat => { mat.side = THREE.DoubleSide; });
-          node.castShadow = node.receiveShadow = true;
-        } else if (n === 'floor' || n === 'plane.003') {
-          node.visible = false; // Hide the old floor
-        } else {
-          node.castShadow = node.receiveShadow = true;
-        }
-      });
     };
 
     // ── RENDER LOOP ───────────────────────────────────────────────────────────
@@ -954,26 +850,16 @@ export default function Map({ onNavigate }: MapProps) {
         activeMarkerIdx = closestIdx;
         if (closestIdx >= 0) {
           const m = markers[closestIdx];
-          const hexStr = '#' + new THREE.Color(m.color).getHexString();
           const canActivate = closestDist <= MARKER_ACTIVATE_RADIUS;
-          markerPrompt.innerHTML = canActivate
-            ? `<span style="color:${hexStr};font-weight:600">${m.label}</span> — Press <kbd style="background:rgba(255,255,255,0.15);padding:2px 8px;border-radius:4px;margin:0 3px">E</kbd> or tap here`
-            : `<span style="color:${hexStr};font-weight:600">${m.label}</span> — get closer to interact`;
-          markerPrompt.style.opacity = '1';
-          markerPrompt.style.pointerEvents = canActivate ? 'auto' : 'none';
+          setMarkerPromptState(markerPrompt, m, canActivate);
         } else {
-          markerPrompt.style.opacity = '0';
-          markerPrompt.style.pointerEvents = 'none';
+          setMarkerPromptState(markerPrompt, null, false);
         }
       } else if (closestIdx >= 0) {
         // Update prompt text as distance changes
         const m = markers[closestIdx];
-        const hexStr = '#' + new THREE.Color(m.color).getHexString();
         const canActivate = closestDist <= MARKER_ACTIVATE_RADIUS;
-        markerPrompt.innerHTML = canActivate
-          ? `<span style="color:${hexStr};font-weight:600">${m.label}</span> — Press <kbd style="background:rgba(255,255,255,0.15);padding:2px 8px;border-radius:4px;margin:0 3px">E</kbd> or tap here`
-          : `<span style="color:${hexStr};font-weight:600">${m.label}</span> — get closer to interact`;
-        markerPrompt.style.pointerEvents = canActivate ? 'auto' : 'none';
+        setMarkerPromptState(markerPrompt, m, canActivate);
       }
 
       // Third-person camera
@@ -1003,39 +889,37 @@ export default function Map({ onNavigate }: MapProps) {
 
     // ── ASSET LOADING ─────────────────────────────────────────────────────────
     const loader = new GLTFLoader();
-    const loadGLB = (url: string) =>
-      new Promise<any>((res, rej) => loader.load(url, res, undefined, rej));
 
     async function init() {
       // 1. Map
       try {
-        const mapGltf = await loadGLB('/map.glb');
+        const mapGltf = await loadGLB(loader, '/map.glb');
         fixMapMaterials(mapGltf.scene);
         scene.add(mapGltf.scene);
-        console.log('✅ map.glb loaded');
+        logDev('✅ map.glb loaded');
       } catch (err) {
         console.error('❌ map.glb failed:', (err as Error).message);
         return;
       }
 
       // 2. Character
-      let charGltf: any;
+      let charGltf: LoadedGLTF;
       try {
-        charGltf = await loadGLB('/character.glb');
-      } catch (err) {
+        charGltf = await loadGLB(loader, '/character.glb');
+      } catch {
         console.warn('⚠️ character.glb not found, running map only');
         return;
       }
 
       // Debug log — open DevTools to see your GLB structure
-      console.log('✅ character.glb:', {
+      logDev('✅ character.glb:', {
         children: charGltf.scene.children.length,
         animations: charGltf.animations.length,
       });
       charGltf.scene.children.forEach((c: THREE.Object3D, i: number) =>
-        console.log(`  child[${i}] "${c.name}" (${c.type})`));
+        logDev(`  child[${i}] "${c.name}" (${c.type})`));
       charGltf.animations.forEach((a: THREE.AnimationClip, i: number) =>
-        console.log(`  anim[${i}] "${a.name}" ${a.duration.toFixed(2)}s`));
+        logDev(`  anim[${i}] "${a.name}" ${a.duration.toFixed(2)}s`));
 
       const rootChildren = charGltf.scene.children as THREE.Object3D[];
       const anims = charGltf.animations as THREE.AnimationClip[];
@@ -1043,13 +927,11 @@ export default function Map({ onNavigate }: MapProps) {
       if (rootChildren.length >= 3) {
         // ── 3-ARMATURE MODE (original main.js structure) ──────────────────
         // child[0]=Idle  child[1]=Run  child[2]=Walk — each pre-animated
-        console.log('📦 3-armature mode');
+        logDev('📦 3-armature mode');
         const children = rootChildren.slice();
         for (let i = 0; i < 3; i++) {
           const arm = children[i];
-          arm.traverse((n: any) => {
-            if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; }
-          });
+          enableMeshShadows(arm);
           scene.add(arm);
           arm.visible = (i === STATE_IDLE);
           const mixer = new THREE.AnimationMixer(arm);
@@ -1058,19 +940,17 @@ export default function Map({ onNavigate }: MapProps) {
             const action = mixer.clipAction(clip);
             action.setLoop(THREE.LoopRepeat, Infinity);
             action.play();
-            console.log(`  arm[${i}] → "${clip.name}"`);
+            logDev(`  arm[${i}] → "${clip.name}"`);
           }
           armatures.push(arm);
           mixers.push(mixer);
         }
       } else if (anims.length >= 1) {
         // ── SINGLE-ARMATURE FALLBACK — clone per animation ─────────────────
-        console.log('📦 Single-armature fallback (cloning)');
+        logDev('📦 Single-armature fallback (cloning)');
         for (let i = 0; i < Math.min(3, anims.length); i++) {
           const arm = charGltf.scene.clone(true);
-          arm.traverse((n: any) => {
-            if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; }
-          });
+          enableMeshShadows(arm);
           scene.add(arm);
           arm.visible = (i === STATE_IDLE);
           const mixer = new THREE.AnimationMixer(arm);
@@ -1079,7 +959,7 @@ export default function Map({ onNavigate }: MapProps) {
           action.play();
           armatures.push(arm);
           mixers.push(mixer);
-          console.log(`  clone[${i}] → "${anims[i].name}"`);
+          logDev(`  clone[${i}] → "${anims[i].name}"`);
         }
       } else {
         console.warn('⚠️ Unexpected character.glb structure');
@@ -1091,7 +971,7 @@ export default function Map({ onNavigate }: MapProps) {
       charH = Math.max(bbox.getSize(new THREE.Vector3()).y, 1.0);
       charPos.set(0, GROUND_Y, 0);
       applyCharTransform();
-      console.log(`  charH = ${charH.toFixed(2)}`);
+      logDev(`  charH = ${charH.toFixed(2)}`);
     }
 
     init().catch(err => console.error('Map init error:', err));
@@ -1101,7 +981,6 @@ export default function Map({ onNavigate }: MapProps) {
       cancelAnimationFrame(animFrameId);
 
       // Hide HUD/joystick when unmounting
-      if (stateEl) stateEl.style.display = 'none';
       if (stateEl) stateEl.style.display = 'none';
       if (hudEl) hudEl.style.display = 'none';
       if (joystickZone) joystickZone.style.display = 'none';
@@ -1117,6 +996,8 @@ export default function Map({ onNavigate }: MapProps) {
       window.removeEventListener('touchend', onTouchEndCancel);
       window.removeEventListener('touchcancel', onTouchEndCancel);
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onOrientationChange);
+      window.removeEventListener('wheel', onWheel);
       joystickZone?.removeEventListener('touchstart', onJoyTouchStart);
 
       window.removeEventListener('keydown', onMarkerKeyDown);
