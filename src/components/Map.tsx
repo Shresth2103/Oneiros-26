@@ -1,9 +1,23 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createMovementKeys, updateMovementKey } from './map/input';
 import { createMarkerPrompt, createSceneMarkers, setMarkerPromptState } from './map/markers';
-import { enableMeshShadows, fixMapMaterials, loadGLB, type LoadedGLTF } from './map/loading';
+import { applyLowQualityModelTuning, enableMeshShadows, fixMapMaterials, loadGLB, type LoadedGLTF } from './map/loading';
+import { applyAtmosphereFog, createFloatingDust } from './map/atmosphere';
+import { createNeonGridMaterial } from './map/neon';
+import {
+  createCharacterAura,
+  createEnhancementState,
+  registerModelEnhancements,
+  setupCinematicLights,
+  updateModelEnhancements,
+} from './map/sceneEnhancements';
+import {
+  detectInitialQuality,
+  downgradeQuality,
+  qualityProfileFor,
+  type QualityProfile,
+} from './map/quality';
 import {
   BOUNDARY_RADIUS,
   CAM_DIST_DEFAULT,
@@ -71,14 +85,15 @@ export default function Map({ onNavigate }: MapProps) {
       antialias: true,
       alpha: false, // Ensure no transparency lets the DOM show through
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    let qualityProfile = detectInitialQuality(renderer);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, qualityProfile.pixelRatioCap));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(new THREE.Color(0x020205), 1); // Set clear color explicitly
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = qualityProfile.enableDynamicLights;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = qualityProfile.level === 'LOW' ? 1.2 : 1.0;
 
     const canvas = renderer.domElement;
     canvas.style.cssText = `
@@ -96,9 +111,18 @@ export default function Map({ onNavigate }: MapProps) {
     // ── SCENE + CAMERA ─────────────────────────────────────────────────────────
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x020205); // Very dark cosmic blue
+    applyAtmosphereFog(scene, qualityProfile.level === 'LOW' ? 0.0075 : 0.012);
+
     const camera = new THREE.PerspectiveCamera(
       60, window.innerWidth / window.innerHeight, 0.05, 300
     );
+    type PostFxRuntime = {
+      composer: { render: () => void; setSize: (w: number, h: number) => void };
+      setSize: (w: number, h: number) => void;
+      setBloomEnabled: (enabled: boolean) => void;
+      setBloomStrength: (value: number) => void;
+    };
+    let postFxRuntime: PostFxRuntime | null = null;
 
     let camYaw = Math.PI;
     let camPitch = 0.1;
@@ -109,27 +133,17 @@ export default function Map({ onNavigate }: MapProps) {
       Math.max(CAM_DIST_MIN, Math.min(CAM_DIST_MAX, v));
 
     // ── LIGHTS ────────────────────────────────────────────────────────────────
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    setupCinematicLights(scene, qualityProfile);
 
-    const sun = new THREE.DirectionalLight(0xfff4e0, 1.8);
-    sun.position.set(30, 60, 20);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.near = 0.5;
-    sun.shadow.camera.far = 180;
-    (sun.shadow.camera as THREE.OrthographicCamera).left = -80;
-    (sun.shadow.camera as THREE.OrthographicCamera).right = 80;
-    (sun.shadow.camera as THREE.OrthographicCamera).top = 80;
-    (sun.shadow.camera as THREE.OrthographicCamera).bottom = -80;
-    sun.shadow.bias = -0.002;
-    scene.add(sun);
-
-    const fill = new THREE.DirectionalLight(0x8ab0dd, 0.4);
-    fill.position.set(-20, 20, -30);
-    scene.add(fill);
+    // ── ATMOSPHERIC FLOATERS / MODEL ENHANCEMENTS ────────────────────────────
+    const dustCount = Math.max(48, Math.floor(180 * qualityProfile.particleCountScale));
+    const floatingDust = createFloatingDust(scene, dustCount);
+    floatingDust.points.visible = qualityProfile.enableParticles;
+    const enhancementState = createEnhancementState();
+    const characterAura = createCharacterAura(scene);
 
     // ── MYSTICAL EMBERS ───────────────────────────────────────────────────────
-    const EMBER_COUNT = 900;
+    const EMBER_COUNT = Math.max(1, Math.floor(900 * qualityProfile.particleCountScale));
 
     // Per-particle typed arrays (much faster than object arrays)
     const ePos = new Float32Array(EMBER_COUNT * 3); // world positions
@@ -248,63 +262,56 @@ export default function Map({ onNavigate }: MapProps) {
 
     // ── NEON GRID FLOOR ───────────────────────────────────────────────────────
     const surfaceGeo = new THREE.PlaneGeometry(300, 300, 1, 1);
-    const surfaceMat = new THREE.ShaderMaterial({
-      uniforms: {
-        color1: { value: new THREE.Color(0x00ffec) }, // cyan
-        color2: { value: new THREE.Color(0xff00ff) },  // magenta
-      },
-      vertexShader: `
-        varying vec3 vWorldPos;
-        void main() {
-          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-          vWorldPos = worldPosition.xyz;
-          gl_Position = projectionMatrix * viewMatrix * worldPosition;
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 color1;
-        uniform vec3 color2;
-        varying vec3 vWorldPos;
-
-        void main() {
-          vec2 coord = vWorldPos.xz * 0.5; // Grid scale
-          
-          // Distance squared for fog (avoiding costly length sqrt)
-          vec2 camOffset = vWorldPos.xz - cameraPosition.xz;
-          float distSq = dot(camOffset, camOffset);
-          
-          // Fast exponential squared fog (0.035^2 = 0.001225)
-          float fogFactor = clamp(exp(-distSq * 0.001225), 0.0, 1.0);
-          
-          // Using fwidth for anti-aliased lines
-          vec2 grid = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
-          float line = min(grid.x, grid.y);
-          
-          // Optimized linear clamps instead of expensive smoothsteps
-          float core = clamp(1.2 - line, 0.0, 1.0);
-          float glow = clamp(1.0 - line * 0.1666, 0.0, 1.0);
-          float gridAlpha = core + (glow * 0.4);
-          
-          // Glowing gradient
-          float mixVal = sin(vWorldPos.x * 0.1) * cos(vWorldPos.z * 0.1) * 0.5 + 0.5;
-          vec3 gridCol = mix(color1, color2, mixVal) * 3.0;
-          
-          // Base color and fog mix
-          vec3 baseCol = vec3(0.02, 0.02, 0.03); 
-          vec3 finalCol = mix(vec3(0.0), mix(baseCol, gridCol, gridAlpha), fogFactor);
-          
-          gl_FragColor = vec4(finalCol, 1.0);
-        }
-      `,
-      transparent: false, // Opaque avoids heavy screen overdraw
-      depthWrite: true,   // Let it occlude things underneath
+    const shaderGridMat = createNeonGridMaterial();
+    const basicGridMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0x37215f),
     });
+    let gridUsesShader = qualityProfile.enableShaderGrid;
+    let surfaceMat: THREE.Material = gridUsesShader ? shaderGridMat : basicGridMat;
 
     const neonSurface = new THREE.Mesh(surfaceGeo, surfaceMat);
     neonSurface.rotation.x = -Math.PI / 2;
     neonSurface.position.y = GROUND_Y + 0.01; // Slightly above ground to prevent z-fight with map
     neonSurface.receiveShadow = false; // Disable shadow reception so it doesn't darken the neon lines
     scene.add(neonSurface);
+
+    const lowTierGrid = new THREE.GridHelper(300, 70, 0x9fe7ff, 0x8b4dff);
+    lowTierGrid.position.y = GROUND_Y + 0.02;
+    if (!Array.isArray(lowTierGrid.material)) {
+      lowTierGrid.material.transparent = true;
+      lowTierGrid.material.opacity = 0.6;
+      lowTierGrid.material.depthWrite = false;
+    }
+    lowTierGrid.visible = qualityProfile.level === 'LOW';
+    scene.add(lowTierGrid);
+
+    const applyQualityProfile = (nextProfile: QualityProfile) => {
+      qualityProfile = nextProfile;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, qualityProfile.pixelRatioCap));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = qualityProfile.enableDynamicLights;
+      renderer.shadowMap.needsUpdate = true;
+      renderer.toneMappingExposure = qualityProfile.level === 'LOW' ? 1.2 : 1.0;
+      applyAtmosphereFog(scene, qualityProfile.level === 'LOW' ? 0.0075 : 0.012);
+
+      const shouldUseShader = qualityProfile.enableShaderGrid;
+      if (shouldUseShader !== gridUsesShader) {
+        gridUsesShader = shouldUseShader;
+        surfaceMat = gridUsesShader ? shaderGridMat : basicGridMat;
+        neonSurface.material = surfaceMat;
+      }
+
+      lowTierGrid.visible = qualityProfile.level === 'LOW';
+
+      emberPoints.visible = qualityProfile.enableParticles;
+      ssObj.visible = qualityProfile.enableParticles;
+      floatingDust.points.visible = qualityProfile.enableParticles;
+
+      if (postFxRuntime) {
+        postFxRuntime.setBloomEnabled(qualityProfile.enableBloom);
+        postFxRuntime.setBloomStrength(qualityProfile.bloomStrength);
+      }
+    };
 
     // ── STARS (SKY) ────────────────────────────────────────────────────────
     const STARS_COUNT = 3000;
@@ -467,11 +474,14 @@ export default function Map({ onNavigate }: MapProps) {
       ssCol[i3 + 3] = 0; ssCol[i3 + 4] = 0; ssCol[i3 + 5] = 0;
     };
 
+    applyQualityProfile(qualityProfile);
+
     // ── RESIZE ────────────────────────────────────────────────────────────────
     const onResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      postFxRuntime?.setSize(window.innerWidth, window.innerHeight);
     };
     const onOrientationChange = () => setTimeout(onResize, 100);
     const onWheel = (e: WheelEvent) => {
@@ -684,10 +694,28 @@ export default function Map({ onNavigate }: MapProps) {
     const camRight = new THREE.Vector3();
     const UP = new THREE.Vector3(0, 1, 0);
     let animFrameId = 0;
+    let lowFpsAccum = 0;
+
+    const maybeDowngradeQuality = (dt: number) => {
+      const fps = 1 / Math.max(dt, 0.0001);
+      if (fps < 30) {
+        lowFpsAccum += dt;
+      } else {
+        lowFpsAccum = Math.max(0, lowFpsAccum - dt * 0.5);
+      }
+
+      if (lowFpsAccum >= 3 && qualityProfile.level !== 'LOW') {
+        const next = qualityProfileFor(downgradeQuality(qualityProfile.level));
+        logDev(`⚙️ Downgrading quality ${qualityProfile.level} -> ${next.level}`);
+        applyQualityProfile(next);
+        lowFpsAccum = 0;
+      }
+    };
 
     const tick = () => {
       animFrameId = requestAnimationFrame(tick);
       const dt = Math.min(clock.getDelta(), 0.05);
+      maybeDowngradeQuality(dt);
 
       // Update animation mixers
       for (const mx of mixers) mx.update(dt);
@@ -748,78 +776,100 @@ export default function Map({ onNavigate }: MapProps) {
         // }
       }
 
-      if (armatures.length > 0) applyCharTransform();
+      if (armatures.length > 0) {
+        const idleY = moving ? 0 : Math.sin(clock.elapsedTime * 1.6) * 0.065;
+        charPos.y = GROUND_Y + idleY;
+        applyCharTransform();
+        characterAura.update(charPos, clock.elapsedTime);
+      }
+
+      if (qualityProfile.enableParticles) {
+        floatingDust.update(dt, charPos);
+      }
+      updateModelEnhancements(enhancementState, clock.elapsedTime);
 
       // ── UPDATE STARS ────────────────────────────────────────────────────────
       starsMat.uniforms.time.value += dt;
+      starsObj.position.x = camCurrent.x * 0.03;
+      starsObj.position.z = camCurrent.z * 0.03;
+      starsObj.rotation.y += dt * 0.015;
+
+      // ── UPDATE NEON GRID ────────────────────────────────────────────────────
+      if (gridUsesShader && surfaceMat instanceof THREE.ShaderMaterial && surfaceMat.uniforms.time) {
+        surfaceMat.uniforms.time.value += dt;
+      }
 
       // ── UPDATE SHOOTING STARS ─────────────────────────────────────────────────
-      for (let i = 0; i < MAX_SHOOTING_STARS; i++) {
-        const d = ssData[i];
-        if (!d.active) {
-          if (Math.random() < 0.015) {
-            resetShootingStar(i);
+      if (qualityProfile.enableParticles) {
+        for (let i = 0; i < MAX_SHOOTING_STARS; i++) {
+          const d = ssData[i];
+          if (!d.active) {
+            if (Math.random() < 0.015) {
+              resetShootingStar(i);
+            }
+            continue;
           }
-          continue;
+
+          d.age += dt;
+          if (d.age >= d.maxAge) {
+            d.active = false;
+            ssPos[i * 6] = 0; ssPos[i * 6 + 1] = -1000; ssPos[i * 6 + 2] = 0;
+            ssPos[i * 6 + 3] = 0; ssPos[i * 6 + 4] = -1000; ssPos[i * 6 + 5] = 0;
+            continue;
+          }
+
+          d.pos.addScaledVector(d.dir, d.speed * dt);
+
+          const head = d.pos;
+          const tail = d.pos.clone().addScaledVector(d.dir, -d.length);
+
+          const idx = i * 6;
+          ssPos[idx] = head.x; ssPos[idx + 1] = head.y; ssPos[idx + 2] = head.z;
+          ssPos[idx + 3] = tail.x; ssPos[idx + 4] = tail.y; ssPos[idx + 5] = tail.z;
+
+          let alpha = 1.0;
+          if (d.age > d.maxAge - 0.2) alpha = (d.maxAge - d.age) / 0.2;
+          else if (d.age < 0.2) alpha = d.age / 0.2;
+
+          ssCol[idx] = alpha; ssCol[idx + 1] = alpha; ssCol[idx + 2] = alpha;
         }
-
-        d.age += dt;
-        if (d.age >= d.maxAge) {
-          d.active = false;
-          ssPos[i * 6] = 0; ssPos[i * 6 + 1] = -1000; ssPos[i * 6 + 2] = 0;
-          ssPos[i * 6 + 3] = 0; ssPos[i * 6 + 4] = -1000; ssPos[i * 6 + 5] = 0;
-          continue;
-        }
-
-        d.pos.addScaledVector(d.dir, d.speed * dt);
-
-        const head = d.pos;
-        const tail = d.pos.clone().addScaledVector(d.dir, -d.length);
-
-        const idx = i * 6;
-        ssPos[idx] = head.x; ssPos[idx + 1] = head.y; ssPos[idx + 2] = head.z;
-        ssPos[idx + 3] = tail.x; ssPos[idx + 4] = tail.y; ssPos[idx + 5] = tail.z;
-
-        let alpha = 1.0;
-        if (d.age > d.maxAge - 0.2) alpha = (d.maxAge - d.age) / 0.2;
-        else if (d.age < 0.2) alpha = d.age / 0.2;
-
-        ssCol[idx] = alpha; ssCol[idx + 1] = alpha; ssCol[idx + 2] = alpha;
+        ssGeo.attributes.position.needsUpdate = true;
+        ssGeo.attributes.color.needsUpdate = true;
       }
-      ssGeo.attributes.position.needsUpdate = true;
-      ssGeo.attributes.color.needsUpdate = true;
 
       // ── UPDATE EMBERS ───────────────────────────────────────────────────────
-      for (let i = 0; i < EMBER_COUNT; i++) {
-        eLife[i] += dt;
-        if (eLife[i] >= eMax[i]) { resetEmber(i, false); continue; }
+      if (qualityProfile.enableParticles) {
+        for (let i = 0; i < EMBER_COUNT; i++) {
+          eLife[i] += dt;
+          if (eLife[i] >= eMax[i]) { resetEmber(i, false); continue; }
 
-        const t = eLife[i] / eMax[i]; // 0 = just born, 1 = dying
+          const t = eLife[i] / eMax[i]; // 0 = just born, 1 = dying
 
-        // Slow sinusoidal horizontal wobble — lazy, dreamlike drift
-        const wobble = Math.sin(eLife[i] * 1.1 + i * 0.37) * 0.006;
+          // Slow sinusoidal horizontal wobble — lazy, dreamlike drift
+          const wobble = Math.sin(eLife[i] * 1.1 + i * 0.37) * 0.006;
 
-        ePos[i * 3] += (eVel[i * 3] + wobble) * dt;
-        ePos[i * 3 + 1] += eVel[i * 3 + 1] * dt * (1 - t * 0.15); // barely decelerates
-        ePos[i * 3 + 2] += (eVel[i * 3 + 2] + wobble) * dt;
+          ePos[i * 3] += (eVel[i * 3] + wobble) * dt;
+          ePos[i * 3 + 1] += eVel[i * 3 + 1] * dt * (1 - t * 0.15); // barely decelerates
+          ePos[i * 3 + 2] += (eVel[i * 3 + 2] + wobble) * dt;
 
-        // Fade: gentle fade-in → long luminous hold → slow fade-out
-        const alpha = t < 0.10
-          ? t / 0.10
-          : t > 0.75
-            ? 1 - (t - 0.75) / 0.25
-            : 1.0;
+          // Fade: gentle fade-in → long luminous hold → slow fade-out
+          const alpha = t < 0.10
+            ? t / 0.10
+            : t > 0.75
+              ? 1 - (t - 0.75) / 0.25
+              : 1.0;
 
-        eCol[i * 3] = eBase[i * 3] * alpha;
-        eCol[i * 3 + 1] = eBase[i * 3 + 1] * alpha;
-        eCol[i * 3 + 2] = eBase[i * 3 + 2] * alpha;
+          eCol[i * 3] = eBase[i * 3] * alpha;
+          eCol[i * 3 + 1] = eBase[i * 3 + 1] * alpha;
+          eCol[i * 3 + 2] = eBase[i * 3 + 2] * alpha;
 
-        // Smooth size taper — no flicker, just slow shrink
-        eSz[i] = eSz[i] * 0.998 + (0.04 + 0.14 * (1 - t)) * 0.002;
+          // Smooth size taper — no flicker, just slow shrink
+          eSz[i] = eSz[i] * 0.998 + (0.04 + 0.14 * (1 - t)) * 0.002;
+        }
+        emberPosAttr.needsUpdate = true;
+        emberColAttr.needsUpdate = true;
+        emberSzAttr.needsUpdate = true;
       }
-      emberPosAttr.needsUpdate = true;
-      emberColAttr.needsUpdate = true;
-      emberSzAttr.needsUpdate = true;
 
       // ── UPDATE MARKERS (proximity + animation) ──────────────────────────────
       let closestIdx = -1;
@@ -871,6 +921,9 @@ export default function Map({ onNavigate }: MapProps) {
         charPos.y + camDist * Math.sin(camPitch) + charH * 0.3,
         charPos.z + Math.cos(camYaw) * camDist * Math.cos(camPitch)
       );
+      camDesired.x += Math.sin(clock.elapsedTime * 0.55) * 0.07;
+      camDesired.y += Math.sin(clock.elapsedTime * 0.9) * 0.05;
+      camDesired.z += Math.cos(clock.elapsedTime * 0.6) * 0.05;
       camCurrent.lerp(camDesired, CAM_SMOOTH);
 
       const camR2 = camCurrent.lengthSq();
@@ -880,58 +933,81 @@ export default function Map({ onNavigate }: MapProps) {
 
       camera.position.copy(camCurrent);
       camera.lookAt(lookAt);
-      renderer.render(scene, camera);
+      if (postFxRuntime) postFxRuntime.composer.render();
+      else renderer.render(scene, camera);
     };
 
-    // Start the loop IMMEDIATELY — camera works before assets finish loading
-    clock.start();
-    tick();
+    const loadingBadge = document.createElement('div');
+    loadingBadge.textContent = 'Preparing 3D experience...';
+    loadingBadge.style.cssText = `
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 41;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.45);
+      color: rgba(255,255,255,0.82);
+      border: 1px solid rgba(255,255,255,0.14);
+      font: 11px/1.2 'Inter', system-ui, sans-serif;
+      pointer-events: none;
+    `;
+    document.body.appendChild(loadingBadge);
 
-    // ── ASSET LOADING ─────────────────────────────────────────────────────────
-    const loader = new GLTFLoader();
+    const initBasicScene = async () => {
+      await new Promise<void>((resolve) => setTimeout(resolve, 120));
+      clock.start();
+      tick();
+    };
 
-    async function init() {
-      // 1. Map
-      try {
-        const mapGltf = await loadGLB(loader, '/map.glb');
+    const enablePostProcessing = async () => {
+      if (!qualityProfile.enableBloom && qualityProfile.level === 'LOW') return;
+      const module = await import('./map/postprocessing');
+      postFxRuntime = module.createPostProcessing(renderer, scene, camera, qualityProfile);
+      postFxRuntime.setSize(window.innerWidth, window.innerHeight);
+    };
+
+    const loadAssets = async () => {
+      const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+      const loader = new GLTFLoader();
+
+      const [mapResult, charResult] = await Promise.allSettled([
+        loadGLB(loader, '/map.glb'),
+        loadGLB(loader, '/character.glb'),
+      ]);
+
+      if (mapResult.status === 'fulfilled') {
+        const mapGltf = mapResult.value;
         fixMapMaterials(mapGltf.scene);
+        if (qualityProfile.level === 'LOW') applyLowQualityModelTuning(mapGltf.scene);
+        registerModelEnhancements(mapGltf.scene, enhancementState);
         scene.add(mapGltf.scene);
         logDev('✅ map.glb loaded');
-      } catch (err) {
-        console.error('❌ map.glb failed:', (err as Error).message);
-        return;
+      } else {
+        console.error('❌ map.glb failed:', (mapResult.reason as Error).message);
       }
 
-      // 2. Character
-      let charGltf: LoadedGLTF;
-      try {
-        charGltf = await loadGLB(loader, '/character.glb');
-      } catch {
+      if (charResult.status !== 'fulfilled') {
         console.warn('⚠️ character.glb not found, running map only');
         return;
       }
 
-      // Debug log — open DevTools to see your GLB structure
+      const charGltf: LoadedGLTF = charResult.value;
+      if (qualityProfile.level === 'LOW') applyLowQualityModelTuning(charGltf.scene);
       logDev('✅ character.glb:', {
         children: charGltf.scene.children.length,
         animations: charGltf.animations.length,
       });
-      charGltf.scene.children.forEach((c: THREE.Object3D, i: number) =>
-        logDev(`  child[${i}] "${c.name}" (${c.type})`));
-      charGltf.animations.forEach((a: THREE.AnimationClip, i: number) =>
-        logDev(`  anim[${i}] "${a.name}" ${a.duration.toFixed(2)}s`));
 
       const rootChildren = charGltf.scene.children as THREE.Object3D[];
       const anims = charGltf.animations as THREE.AnimationClip[];
 
       if (rootChildren.length >= 3) {
-        // ── 3-ARMATURE MODE (original main.js structure) ──────────────────
-        // child[0]=Idle  child[1]=Run  child[2]=Walk — each pre-animated
-        logDev('📦 3-armature mode');
         const children = rootChildren.slice();
         for (let i = 0; i < 3; i++) {
           const arm = children[i];
           enableMeshShadows(arm);
+          registerModelEnhancements(arm, enhancementState, { isCharacter: true });
           scene.add(arm);
           arm.visible = (i === STATE_IDLE);
           const mixer = new THREE.AnimationMixer(arm);
@@ -940,17 +1016,15 @@ export default function Map({ onNavigate }: MapProps) {
             const action = mixer.clipAction(clip);
             action.setLoop(THREE.LoopRepeat, Infinity);
             action.play();
-            logDev(`  arm[${i}] → "${clip.name}"`);
           }
           armatures.push(arm);
           mixers.push(mixer);
         }
       } else if (anims.length >= 1) {
-        // ── SINGLE-ARMATURE FALLBACK — clone per animation ─────────────────
-        logDev('📦 Single-armature fallback (cloning)');
         for (let i = 0; i < Math.min(3, anims.length); i++) {
           const arm = charGltf.scene.clone(true);
           enableMeshShadows(arm);
+          registerModelEnhancements(arm, enhancementState, { isCharacter: true });
           scene.add(arm);
           arm.visible = (i === STATE_IDLE);
           const mixer = new THREE.AnimationMixer(arm);
@@ -959,22 +1033,33 @@ export default function Map({ onNavigate }: MapProps) {
           action.play();
           armatures.push(arm);
           mixers.push(mixer);
-          logDev(`  clone[${i}] → "${anims[i].name}"`);
         }
-      } else {
-        console.warn('⚠️ Unexpected character.glb structure');
-        return;
       }
 
-      // Measure real character height for camera offset
-      const bbox = new THREE.Box3().setFromObject(armatures[STATE_IDLE]);
-      charH = Math.max(bbox.getSize(new THREE.Vector3()).y, 1.0);
-      charPos.set(0, GROUND_Y, 0);
-      applyCharTransform();
-      logDev(`  charH = ${charH.toFixed(2)}`);
-    }
+      if (armatures.length > 0) {
+        const bbox = new THREE.Box3().setFromObject(armatures[STATE_IDLE]);
+        charH = Math.max(bbox.getSize(new THREE.Vector3()).y, 1.0);
+        charPos.set(0, GROUND_Y, 0);
+        applyCharTransform();
+      }
+    };
 
-    init().catch(err => console.error('Map init error:', err));
+    const startAnimationLoop = async () => {
+      await initBasicScene();
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          loadAssets().finally(() => {
+            if (document.body.contains(loadingBadge)) document.body.removeChild(loadingBadge);
+          }).catch(err => console.error('Map asset init error:', err));
+        }, 80);
+      });
+
+      setTimeout(() => {
+        enablePostProcessing().catch(err => console.error('PostFX init error:', err));
+      }, 420);
+    };
+
+    startAnimationLoop().catch(err => console.error('Map start error:', err));
 
     // ── CLEANUP ───────────────────────────────────────────────────────────────
     return () => {
@@ -1003,6 +1088,7 @@ export default function Map({ onNavigate }: MapProps) {
       window.removeEventListener('keydown', onMarkerKeyDown);
       markerPrompt.removeEventListener('click', onMarkerTap);
       if (document.body.contains(markerPrompt)) document.body.removeChild(markerPrompt);
+      if (document.body.contains(loadingBadge)) document.body.removeChild(loadingBadge);
 
       // Dispose marker geometries
       ringGeo.dispose();
@@ -1022,6 +1108,13 @@ export default function Map({ onNavigate }: MapProps) {
       starTex.dispose();
       ssGeo.dispose();
       ssMat.dispose();
+      shaderGridMat.dispose();
+      basicGridMat.dispose();
+      if (!Array.isArray(lowTierGrid.material)) lowTierGrid.material.dispose();
+      lowTierGrid.geometry.dispose();
+      floatingDust.dispose();
+      characterAura.dispose();
+      (postFxRuntime?.composer as { dispose?: () => void } | undefined)?.dispose?.();
       if (container.contains(canvas)) container.removeChild(canvas);
     };
   }, []);

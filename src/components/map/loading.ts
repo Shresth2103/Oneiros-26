@@ -49,3 +49,22 @@ export const fixMapMaterials = (gltfScene: THREE.Object3D) => {
     node.receiveShadow = true;
   });
 };
+
+export const applyLowQualityModelTuning = (root: THREE.Object3D) => {
+  root.traverse((node: THREE.Object3D) => {
+    if (!(node instanceof THREE.Mesh)) return;
+
+    node.castShadow = false;
+    node.receiveShadow = false;
+    node.frustumCulled = true;
+
+    const geometry = node.geometry;
+    if (!geometry) return;
+    geometry.computeBoundingSphere();
+
+    const positionAttr = geometry.getAttribute('position');
+    if (positionAttr && positionAttr.count > 60000) {
+      geometry.setDrawRange(0, Math.floor(positionAttr.count * 0.7));
+    }
+  });
+};
