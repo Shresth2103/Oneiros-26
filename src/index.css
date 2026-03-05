@@ -8,5 +8,5 @@ body {
     /* Helpful baseline for text against black background */
     font-family: 'Exo 2', sans-serif;
     /* Fallback for the rest of the app */
-    overflow-x: hidden;
+    overflow: hidden;
 }

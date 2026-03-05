@@ -402,28 +402,6 @@
     }
 }
 
-/* Scrollbar */
-.minor-events-page {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(77, 216, 230, 0.25) transparent;
-}
-
-.minor-events-page::-webkit-scrollbar {
-    width: 6px;
-}
-
-.minor-events-page::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.minor-events-page::-webkit-scrollbar-thumb {
-    background: rgba(77, 216, 230, 0.25);
-    border-radius: 3px;
-}
-
-.minor-events-page::-webkit-scrollbar-thumb:hover {
-    background: rgba(77, 216, 230, 0.45);
-}
 
 /* ── DOME GALLERY SECTION ──────────────────────────────────────────── */
 .minor-events-dome-section {

@@ -401,26 +401,3 @@
         border-bottom: none;
     }
 }
-
-/* Scrollbar */
-.about-page {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(77, 216, 230, 0.25) transparent;
-}
-
-.about-page::-webkit-scrollbar {
-    width: 6px;
-}
-
-.about-page::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.about-page::-webkit-scrollbar-thumb {
-    background: rgba(77, 216, 230, 0.25);
-    border-radius: 3px;
-}
-
-.about-page::-webkit-scrollbar-thumb:hover {
-    background: rgba(77, 216, 230, 0.45);
-}
