@@ -136,7 +136,7 @@ export default function MinorEvents() {
                         segments={isMobile ? 18 : 28}
                         dragDampening={5}
                         grayscale={true}
-                        imageBorderRadius={isMobile ? "25px" : "50px"}
+                        imageBorderRadius={isMobile ? "16px" : "50px"}
                     />
                     <div className="minor-events-dome-overlay-text">
                         <p className="minor-events-dome-label minor-events-animate minor-events-animate-delay-1">THE ARCHIVE</p>
