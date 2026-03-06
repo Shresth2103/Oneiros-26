@@ -11,7 +11,6 @@ export default defineConfig({
   ],
   build: {
     sourcemap: false,
-    assetsInlineLimit: 0, // don't base64-inline any binary assets
     rollupOptions: {
       output: {
         manualChunks: {
