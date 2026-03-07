@@ -28,7 +28,7 @@ export default function Schedule() {
                 <CosmicBackground />
             </div>
             <img
-                src="/favicon-nobg.png"
+                src="/favicon-nobg.webp"
                 alt=""
                 className="schedule-fixed-watermark"
                 draggable={false}

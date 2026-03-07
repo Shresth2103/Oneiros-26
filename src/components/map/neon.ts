@@ -50,10 +50,10 @@ export function createNeonGridMaterial() {
         return mix(a,b,u.x) + (c-a)*u.y*(1.0-u.x) + (d-b)*u.x*u.y;
       }
 
-      // 3-octave FBM
+      // 2-octave FBM (optimized for performance)
       float fbm(vec2 p) {
         float v = 0.0, amp = 0.5;
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 2; i++) {
           v   += amp * vnoise(p);
           p    = p * 2.1 + vec2(1.7, 9.2);
           amp *= 0.5;

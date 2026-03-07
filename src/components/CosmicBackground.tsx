@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import './CosmicBackground.css';
 
 // Pre-generate star field as a single background-image per layer
@@ -51,31 +51,29 @@ const generateStarLayer = (cfg: typeof LAYER_CONFIGS[0]) => {
   return { backgroundImage: gradients.join(','), boxShadow: shadows.join(',') };
 };
 
+const PRE_GENERATED_LAYERS = LAYER_CONFIGS.map((cfg, layerIdx) => {
+  const { backgroundImage, boxShadow } = generateStarLayer(cfg);
+
+  return (
+    <div
+      key={`layer-${layerIdx}`}
+      style={{
+        position: 'absolute',
+        inset: '-50%',
+        width: '200%',
+        height: '200%',
+        backgroundImage,
+        backgroundSize: '100% 100%',
+        backgroundRepeat: 'no-repeat',
+        boxShadow,
+        animation: `cosmic-rotate ${cfg.duration}s linear infinite`,
+        willChange: 'transform',
+      }}
+    />
+  );
+});
+
 const CosmicBackground: React.FC = () => {
-  const layers = useMemo(() => {
-    return LAYER_CONFIGS.map((cfg, layerIdx) => {
-      const { backgroundImage, boxShadow } = generateStarLayer(cfg);
-
-      return (
-        <div
-          key={`layer-${layerIdx}`}
-          style={{
-            position: 'absolute',
-            inset: '-50%',
-            width: '200%',
-            height: '200%',
-            backgroundImage,
-            backgroundSize: '100% 100%',
-            backgroundRepeat: 'no-repeat',
-            boxShadow,
-            animation: `cosmic-rotate ${cfg.duration}s linear infinite`,
-            willChange: 'transform',
-          }}
-        />
-      );
-    });
-  }, []);
-
   return (
     <div
       style={{
@@ -89,7 +87,7 @@ const CosmicBackground: React.FC = () => {
         overflow: 'hidden',
       }}
     >
-      {layers}
+      {PRE_GENERATED_LAYERS}
     </div>
   );
 };

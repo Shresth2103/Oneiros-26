@@ -15,7 +15,7 @@ import {
 } from './map/sceneEnhancements';
 import {
   getMobileResolutionProfile,
-  qualityProfileFor,
+  detectInitialQuality,
   type QualityProfile,
 } from './map/quality';
 import {
@@ -115,8 +115,8 @@ export default function Map({ onNavigate, onClose, activePage }: MapProps) {
       powerPreference: 'high-performance',
     });
 
-    // Use MEDIUM on mobile, HIGH on desktop, then tune mobile sharpness separately.
-    let qualityProfile = qualityProfileFor(isMobile ? 'MEDIUM' : 'HIGH');
+    // Automatically detect hardware capability and assign an initial quality (LOW to HIGH)
+    let qualityProfile = detectInitialQuality(renderer);
     const mobileResolutionProfile = isMobile ? getMobileResolutionProfile(renderer) : null;
 
     // Hard-cap DPR to avoid runaway fill-rate on ultra-dense mobile screens.
@@ -708,6 +708,12 @@ export default function Map({ onNavigate, onClose, activePage }: MapProps) {
       // While preloader is active, don't render — give GPU 100% to video decoder
       if (!renderingEnabled) return;
 
+      // ── GPU PAUSE ────────────────────────────────────────────────────────
+      // If a React UI overlay is open, seamlessly freeze the 3D scene.
+      // This immediately frees all computing power to render heavy DOM components,
+      // fixing the transition stutter caused by simultaneous rendering contention.
+      if (activePageRef.current) return;
+
       frameCount++;
       const dt = Math.min(timer.getDelta(), 0.05);
       const elapsed = timer.getElapsed();
@@ -1095,8 +1101,10 @@ export default function Map({ onNavigate, onClose, activePage }: MapProps) {
         camera.lookAt(0, charH * 0.55, 0);
         renderer.render(scene, camera);
         if (postFxRuntime) postFxRuntime.composer.render();
-        // Yield between warm-up renders to avoid blocking
-        await new Promise<void>(r => requestAnimationFrame(() => r()));
+        // Yield generously between warm-up renders to avoid blocking the preloader video decoder
+        // requestAnimationFrame still hammers the main thread immediately. setTimeout(..., 40) 
+        // gives the browser exactly 2-3 frames to process video and fluidly finish the playback.
+        await new Promise<void>(r => setTimeout(r, 40));
       }
 
       // Restore camera

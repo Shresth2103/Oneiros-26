@@ -15,14 +15,19 @@ export default function Preloader({ onComplete }: PreloaderProps) {
 
     const handleComplete = useCallback(() => {
         setFadeOut(true);
-        // Release the video decoder immediately to free GPU resources
+        // Pause the video immediately so it doesn't continue playing
         const v = videoRef.current;
-        if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+        if (v) { v.pause(); }
+
         window.dispatchEvent(new Event('start-experience'));
+
         // Delay unmount until AFTER the 4.5s intro rotation finishes.
-        // Unmounting earlier triggers GC of video decoder buffers mid-intro,
+        // Unmounting or tearing down the video earlier triggers GC mid-intro,
         // causing a visible frame spike.
-        setTimeout(() => { onComplete(); }, 5500);
+        setTimeout(() => {
+            if (v) { v.removeAttribute('src'); v.load(); }
+            onComplete();
+        }, 5500);
     }, [onComplete]);
 
     const startTimeRef = useRef(performance.now());
@@ -83,7 +88,7 @@ export default function Preloader({ onComplete }: PreloaderProps) {
 
     return (
         <div className={`preloader-container ${fadeOut ? 'fade-out' : ''}`}>
-            <CosmicBackground />
+            {!fadeOut && <CosmicBackground />}
 
             <video
                 ref={videoRef}

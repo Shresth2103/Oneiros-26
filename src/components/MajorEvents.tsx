@@ -23,7 +23,7 @@ const events: Event[] = [
     name: "REQUIEM",
     prize: "₹50,000",
     description: "A high-octane musical showdown where vocalists and instrumentalists battle for harmonic supremacy.",
-    images: ["/major_events/requiem1.jpg", "/major_events/requiem2.jpg", "/major_events/requiem3.jpg"],
+    images: ["/major_events/requiem1.webp", "/major_events/requiem2.webp", "/major_events/requiem3.webp"],
     imageLeft: true,
     glowColors: [CYAN, PURPLE, CYAN],
   },
@@ -32,7 +32,7 @@ const events: Event[] = [
     name: "DESTIVAL",
     prize: "₹60,000",
     description: "A high-energy dance competition celebrating rhythm, choreography, and the art of movement.",
-    images: ["/major_events/destival1.jpg", "/major_events/destival2.jpg", "/major_events/destival3.jpg"],
+    images: ["/major_events/destival1.webp", "/major_events/destival2.webp", "/major_events/destival3.webp"],
     imageLeft: false,
     glowColors: [PINK, CYAN, PURPLE],
   },
@@ -41,7 +41,7 @@ const events: Event[] = [
     name: "COSMOS",
     prize: "₹35,000",
     description: "A premier fashion runway where style meets creativity in a dazzling display of avant-garde design.",
-    images: ["/major_events/cosmos1.jpg", "/major_events/cosmos2.jpg", "/major_events/cosmos3.jpg"],
+    images: ["/major_events/cosmos1.webp", "/major_events/cosmos2.webp", "/major_events/cosmos3.webp"],
     imageLeft: true,
     glowColors: [CYAN, PINK, CYAN],
   },
@@ -50,7 +50,7 @@ const events: Event[] = [
     name: "SPOT PHOTOGRAPHY",
     prize: "₹25,000",
     description: "A test of pure skill where photographers have two hours to capture three unedited images on a surprise theme.",
-    images: ["/major_events/photo1.jpg", "/major_events/photo2.jpg", "/major_events/photo3.jpg"],
+    images: ["/major_events/photo1.webp", "/major_events/photo2.webp", "/major_events/photo3.webp"],
     imageLeft: false,
     glowColors: [PURPLE, CYAN, PINK],
   },
@@ -59,7 +59,7 @@ const events: Event[] = [
     name: "BEHAS",
     prize: "₹25,000",
     description: "A premier parliamentary debating tournament where the sharpest minds clash in a battle of wit and logic.",
-    images: ["/major_events/behas1.jpg", "/major_events/behas2.jpg", "/major_events/behas3.jpg"],
+    images: ["/major_events/behas1.webp", "/major_events/behas2.webp", "/major_events/behas3.webp"],
     imageLeft: true,
     glowColors: [CYAN, PURPLE, PINK],
   },
@@ -68,7 +68,7 @@ const events: Event[] = [
     name: "NUKKAD NATAK",
     prize: "₹30,000",
     description: "A powerful street play competition bringing impactful stories and vibrant energy to the open air.",
-    images: ["/major_events/nukkad1.jpg", "/major_events/nukkad2.jpg", "/major_events/nukkad3.jpg"],
+    images: ["/major_events/nukkad1.webp", "/major_events/nukkad2.webp", "/major_events/nukkad3.webp"],
     imageLeft: false,
     glowColors: [PINK, CYAN, PURPLE],
   },
@@ -293,7 +293,7 @@ export default function MajorEvents() {
       </div>
 
       <img
-        src="/favicon-nobg.png"
+        src="/favicon-nobg.webp"
         alt=""
         style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(60vw,480px)", opacity: 0.09, filter: "blur(2px) brightness(1.3)", pointerEvents: "none", zIndex: 0 }}
         draggable={false}
@@ -308,11 +308,8 @@ export default function MajorEvents() {
         >
           <div className="absolute top-0 left-0 right-0" style={{ height: "1px", background: `linear-gradient(90deg, transparent 0%, ${CYAN}50 50%, transparent 100%)` }} />
 
-          <motion.div
+          <div
             className="relative z-10 px-6 text-center"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: "easeOut" }}
           >
             <h1 style={{ fontFamily: "'Cinzel', serif", fontSize: "clamp(2.8rem, 8vw, 6.5rem)", fontWeight: 400, color: "#ffffff", letterSpacing: "0.12em", marginBottom: "1.2rem", textShadow: "0 0 40px rgba(255,255,255,0.15), 0 0 80px rgba(200,210,255,0.08)" }}>
               MAJOR EVENTS
@@ -322,7 +319,7 @@ export default function MajorEvents() {
               <span style={{ display: "inline-block", margin: "0 1.2em", opacity: 0.4 }}>·</span>
               INFINITE GLORY
             </p>
-          </motion.div>
+          </div>
 
           <div style={{ position: "absolute", bottom: "2.5rem", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem", animation: "majorEventsBounce 2s ease-in-out infinite" }}>
             <div style={{ width: "1px", height: "36px", background: "linear-gradient(to bottom, rgba(255,255,255,0.4), transparent)" }} />

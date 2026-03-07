@@ -31,7 +31,7 @@ export default function Sponsors() {
                 <CosmicBackground />
             </div>
             <img
-                src="/favicon-nobg.png"
+                src="/favicon-nobg.webp"
                 alt=""
                 className="sponsors-fixed-watermark"
                 draggable={false}
