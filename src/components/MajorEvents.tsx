@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { motion, useInView } from "motion/react";
 import CosmicBackground from "./CosmicBackground";
-import "./Majorevents.css";
+import "./MajorEvents.css";
 
 const CYAN = "#00d2d3";
 const PINK = "#e84393";
@@ -99,7 +99,7 @@ function ImageCollage({
   return (
     <motion.div
       className="relative flex-shrink-0"
-      style={{ width: "500px", height: "580px" }}
+      style={{ width: "min(500px, 90vw)", height: "min(580px, 70vw)" }}
       initial={{ opacity: 0, y: 40 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.3 }}
@@ -111,8 +111,8 @@ function ImageCollage({
           onClick={() => sendToBack(imgIndex)}
           initial={false}
           animate={{
-            top: slots[slotPos].top,
-            left: slots[slotPos].left,
+            top: `${slots[slotPos].top * 0.55}px`,
+            left: `${slots[slotPos].left * 0.55}px`,
             rotate: baseRotations[slotPos],
           }}
           transition={{ duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -120,8 +120,8 @@ function ImageCollage({
           whileTap={{ scale: 0.93, transition: { duration: 0.12 } }}
           className="absolute overflow-hidden cursor-pointer select-none"
           style={{
-            width: "260px",
-            height: "340px",
+            width: "min(260px, 55vw)",
+            height: "min(340px, 72vw)",
             zIndex: slotPos + 1,
             borderRadius: "16px",
             border: `1.5px solid ${glowColors[imgIndex]}80`,
@@ -159,18 +159,18 @@ function ImageCollage({
 
 function EventSection({ event }: { event: Event }) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, amount: 0.25 });
+  const inView = useInView(ref, { once: true, amount: 0.2 });
 
   const textVariants = {
-    hidden: { opacity: 0, x: event.imageLeft ? 60 : -60 },
-    visible: { opacity: 1, x: 0 },
+    hidden: { opacity: 0, y: 30 },
+    visible: { opacity: 1, y: 0 },
   };
 
   return (
     <section
       ref={ref}
       className="relative flex items-center justify-center overflow-hidden"
-      style={{ minHeight: "100vh" }}
+      style={{ minHeight: "100vh", padding: "5rem 0" }}
     >
       <div
         className="absolute inset-0 pointer-events-none"
@@ -181,11 +181,12 @@ function EventSection({ event }: { event: Event }) {
         style={{ height: "1px", background: `linear-gradient(90deg, transparent 0%, ${CYAN}40 30%, ${PINK}40 70%, transparent 100%)` }}
       />
 
+      {/* ── DESKTOP: side-by-side layout ── */}
       <div
-        className="relative z-10 flex items-center justify-between w-full max-w-7xl mx-auto px-10 md:px-16 gap-8"
+        className="relative z-10 hidden lg:flex items-center justify-between w-full max-w-7xl mx-auto px-16 gap-8"
         style={{ flexDirection: event.imageLeft ? "row" : "row-reverse" }}
       >
-        <div className="hidden lg:flex items-center justify-center flex-shrink-0">
+        <div className="flex items-center justify-center flex-shrink-0">
           <ImageCollage images={event.images} glowColors={event.glowColors} reversed={!event.imageLeft} />
         </div>
 
@@ -203,24 +204,16 @@ function EventSection({ event }: { event: Event }) {
               {event.number}
             </span>
           </div>
-
           <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: "clamp(2.8rem, 6vw, 5.5rem)", fontWeight: 700, color: "#ffffff", lineHeight: 1.05, letterSpacing: "0.04em", marginBottom: "1.2rem" }}>
             {event.name}
           </h2>
-
           <div className="flex items-center gap-3 mb-6">
-            <span style={{ fontFamily: "'Cinzel', serif", fontSize: "0.7rem", letterSpacing: "0.3em", color: `${CYAN}90` }}>
-              PRIZE POOL
-            </span>
-            <span style={{ fontFamily: "'Cinzel', serif", fontSize: "1.1rem", color: CYAN, textShadow: `0 0 12px ${CYAN}cc`, fontWeight: 600 }}>
-              {event.prize}
-            </span>
+            <span style={{ fontFamily: "'Cinzel', serif", fontSize: "0.7rem", letterSpacing: "0.3em", color: `${CYAN}90` }}>PRIZE POOL</span>
+            <span style={{ fontFamily: "'Cinzel', serif", fontSize: "1.1rem", color: CYAN, textShadow: `0 0 12px ${CYAN}cc`, fontWeight: 600 }}>{event.prize}</span>
           </div>
-
           <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "clamp(1.35rem, 2vw, 1.7rem)", fontStyle: "italic", fontWeight: 300, color: "rgba(255,255,255,0.65)", lineHeight: 1.85, maxWidth: "420px", marginBottom: "2rem" }}>
             {event.description}
           </p>
-
           <div className="flex items-center gap-3">
             {[PINK, CYAN, CYAN].map((color, i) => (
               <div key={i} style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: color, boxShadow: `0 0 8px ${color}aa` }} />
@@ -228,6 +221,66 @@ function EventSection({ event }: { event: Event }) {
           </div>
         </motion.div>
       </div>
+
+      {/* ── MOBILE: stacked layout ── */}
+      <motion.div
+        className="relative z-10 flex lg:hidden flex-col items-center w-full px-6 gap-10 text-center"
+        initial={{ opacity: 0, y: 40 }}
+        animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+      >
+        {/* Single hero image on mobile */}
+        <div
+          style={{
+            width: "85vw",
+            height: "55vw",
+            maxWidth: "400px",
+            maxHeight: "260px",
+            borderRadius: "16px",
+            overflow: "hidden",
+            border: `1.5px solid ${event.glowColors[0]}60`,
+            boxShadow: `0 0 24px ${event.glowColors[0]}50`,
+            flexShrink: 0,
+          }}
+        >
+          <img
+            src={event.images[0]}
+            alt={event.name}
+            style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.88) contrast(1.05)" }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = `https://placehold.co/400x260/0a0a1a/00d2d3?text=${event.name}`;
+            }}
+          />
+        </div>
+
+        {/* Text */}
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-3 mb-4">
+            <div style={{ width: "28px", height: "1px", backgroundColor: CYAN, opacity: 0.6 }} />
+            <span style={{ fontFamily: "'Cinzel', serif", fontSize: "0.7rem", letterSpacing: "0.35em", color: CYAN }}>{event.number}</span>
+            <div style={{ width: "28px", height: "1px", backgroundColor: CYAN, opacity: 0.6 }} />
+          </div>
+
+          <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: "clamp(2rem, 9vw, 3.5rem)", fontWeight: 700, color: "#ffffff", lineHeight: 1.05, letterSpacing: "0.06em", marginBottom: "1rem" }}>
+            {event.name}
+          </h2>
+
+          <div className="flex items-center justify-center gap-3 mb-5">
+            <span style={{ fontFamily: "'Cinzel', serif", fontSize: "0.65rem", letterSpacing: "0.3em", color: `${CYAN}90` }}>PRIZE POOL</span>
+            <span style={{ fontFamily: "'Cinzel', serif", fontSize: "1rem", color: CYAN, textShadow: `0 0 12px ${CYAN}cc`, fontWeight: 600 }}>{event.prize}</span>
+          </div>
+
+          <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "clamp(1.1rem, 4.5vw, 1.4rem)", fontStyle: "italic", fontWeight: 300, color: "rgba(255,255,255,0.65)", lineHeight: 1.8, maxWidth: "340px", marginBottom: "1.5rem" }}>
+            {event.description}
+          </p>
+
+          <div className="flex items-center justify-center gap-3">
+            {[PINK, CYAN, CYAN].map((color, i) => (
+              <div key={i} style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: color, boxShadow: `0 0 6px ${color}aa` }} />
+            ))}
+          </div>
+        </div>
+      </motion.div>
     </section>
   );
 }
