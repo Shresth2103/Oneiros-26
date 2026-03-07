@@ -22,6 +22,7 @@ export function createNeonGridMaterial() {
     },
 
     vertexShader: /* glsl */`
+      precision highp float;
       varying vec2 vUv;
       void main() {
         vUv = uv;
@@ -30,6 +31,7 @@ export function createNeonGridMaterial() {
     `,
 
     fragmentShader: /* glsl */`
+      precision highp float;
       uniform float uTime;
       uniform float uGlow;
 
@@ -72,13 +74,13 @@ export function createNeonGridMaterial() {
 
         float s = t * 5.0;
         float fi = fract(s);
-        int   ii = int(floor(s));
+        float ii = floor(s);
         fi = fi * fi * (3.0 - 2.0 * fi);
 
-        if (ii == 0) return mix(c0, c1, fi);
-        if (ii == 1) return mix(c1, c2, fi);
-        if (ii == 2) return mix(c2, c3, fi);
-        if (ii == 3) return mix(c3, c4, fi);
+        if (ii < 0.5) return mix(c0, c1, fi);
+        if (ii < 1.5) return mix(c1, c2, fi);
+        if (ii < 2.5) return mix(c2, c3, fi);
+        if (ii < 3.5) return mix(c3, c4, fi);
         return mix(c4, c0, fi);
       }
 

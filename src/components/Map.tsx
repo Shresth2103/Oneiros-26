@@ -339,7 +339,12 @@ export default function Map({ onNavigate, onClose, activePage }: MapProps) {
     // ── NEON GRID FLOOR ───────────────────────────────────────────────────────
     const surfaceGeo = new THREE.PlaneGeometry(300, 300, 1, 1);
     const shaderGridMat = createNeonGridMaterial();
-    const basicGridMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x37215f) });
+    const basicGridMat = new THREE.MeshBasicMaterial({
+      color: 0x00d2d3,
+      transparent: true,
+      opacity: 0.12,
+      wireframe: true,
+    });
 
     // Always use the quality profile setting, even on mobile
     let gridUsesShader = qualityProfile.enableShaderGrid;
