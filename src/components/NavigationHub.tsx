@@ -11,18 +11,18 @@ interface NavElement {
   image: string;
 }
 
-const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&q=80';
+
 
 const NAV_ELEMENTS: NavElement[] = [
-  { id: 'about', label: 'About', description: 'Where Dreams Meet the Cosmos', color: '#06B6D4', icon: '✦', image: '/Nav/onologo.png' },
-  { id: 'major-events', label: 'Events', description: 'Festival Experiences', color: '#EC4899', icon: '◆', image: '/Nav/stage.webp' },
-  { id: 'minor-events', label: 'Activities', description: 'Creative Showcases', color: '#8B5CF6', icon: '✺', image: PLACEHOLDER_IMG },
-  { id: 'gallery', label: 'Gallery', description: 'Visual Moments', color: '#7C3AED', icon: '◈', image: '/Nav/dome.webp' },
-  { id: 'artist', label: 'Artists', description: 'Star Performers', color: '#F59E0B', icon: '♪', image: '/Nav/artists.webp' },
-  { id: 'schedule', label: 'Schedule', description: 'Festival Timeline', color: '#3B82F6', icon: '◉', image: PLACEHOLDER_IMG },
-  { id: 'sponsors', label: 'Sponsors', description: 'Our Partners', color: '#10B981', icon: '⟡', image: PLACEHOLDER_IMG },
-  { id: 'team', label: 'Team', description: 'The Dreamweavers', color: '#14B8A6', icon: '⊹', image: PLACEHOLDER_IMG },
-  { id: 'contact', label: 'Contact', description: 'Reach Out', color: '#F43F5E', icon: '✧', image: PLACEHOLDER_IMG },
+  { id: 'about', label: 'About', description: 'Where Dreams Meet the Cosmos', color: '#06B6D4', icon: '✦', image: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=800&q=80' },
+  { id: 'major-events', label: 'Events', description: 'Festival Experiences', color: '#EC4899', icon: '◆', image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&q=80' },
+  { id: 'minor-events', label: 'Activities', description: 'Creative Showcases', color: '#8B5CF6', icon: '✺', image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&q=80' },
+  { id: 'gallery', label: 'Gallery', description: 'Visual Moments', color: '#7C3AED', icon: '◈', image: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=800&q=80' },
+  { id: 'artist', label: 'Artists', description: 'Star Performers', color: '#F59E0B', icon: '♪', image: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?w=800&q=80' },
+  { id: 'schedule', label: 'Schedule', description: 'Festival Timeline', color: '#3B82F6', icon: '◉', image: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=800&q=80' },
+  { id: 'sponsors', label: 'Sponsors', description: 'Our Partners', color: '#10B981', icon: '⟡', image: 'https://images.unsplash.com/photo-1614730321146-b6fa6a46bcb4?w=800&q=80' },
+  { id: 'team', label: 'Team', description: 'The Dreamweavers', color: '#14B8A6', icon: '⊹', image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80' },
+  { id: 'contact', label: 'Contact', description: 'Reach Out', color: '#F43F5E', icon: '✧', image: 'https://images.unsplash.com/photo-1516339901601-2e1b62dc0c45?w=800&q=80' },
 ];
 
 interface NavigationHubProps {
@@ -182,11 +182,8 @@ export default function NavigationHub({ onNavigate, activePage }: NavigationHubP
       {...bind()}
       style={{ touchAction: 'none' }}
     >
-      {/* ── Title ─────────────────────────────────────────────────────── */}
-      <div className="nav-hub__header">
-        <h1 className="nav-hub__title">ONEIROS</h1>
-        <p className="nav-hub__subtitle">2026</p>
-      </div>
+      {/* ── Ambient Nebula ────────────────────────────────────────────── */}
+      <div className="nav-hub__nebula" />
 
       {/* ── Carousel ──────────────────────────────────────────────────── */}
       <div className="nav-hub__carousel">

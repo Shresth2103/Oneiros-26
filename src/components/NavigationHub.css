@@ -26,42 +26,53 @@
   pointer-events: none;
 }
 
-/* ── Header / title ────────────────────────────────────────────────── */
-.nav-hub__header {
+/* ── Ambient Nebula ────────────────────────────────────────────────── */
+.nav-hub__nebula {
   position: absolute;
-  top: clamp(80px, 14vh, 140px);
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
-  text-align: center;
-  z-index: 2;
+  transform: translate(-50%, -50%);
+  width: 70vw;
+  height: 70vw;
+  max-width: 1000px;
+  max-height: 1000px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.2) 0%, rgba(6, 182, 212, 0.08) 40%, transparent 70%);
+  filter: blur(60px);
+  z-index: 1;
+  /* Behind cards */
   pointer-events: none;
+  animation: nebula-pulse 6s ease-in-out infinite alternate, nebula-spin 60s linear infinite;
+  mix-blend-mode: screen;
 }
 
-.nav-hub__title {
-  font-family: 'Orbitron', 'Exo 2', sans-serif;
-  font-size: clamp(2.2rem, 6vw, 4.5rem);
-  font-weight: 700;
-  letter-spacing: 0.35em;
-  color: #fff;
-  text-shadow:
-    0 0 30px rgba(139, 92, 246, 0.5),
-    0 0 60px rgba(6, 182, 212, 0.25);
-  margin: 0;
-  line-height: 1.1;
+@keyframes nebula-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.6;
+    filter: blur(50px);
+  }
+
+  100% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 1;
+    filter: blur(80px);
+  }
 }
 
-.nav-hub__subtitle {
-  font-family: 'Orbitron', 'Exo 2', sans-serif;
-  font-size: clamp(0.9rem, 2vw, 1.4rem);
-  font-weight: 400;
-  letter-spacing: 0.8em;
-  color: rgba(255, 255, 255, 0.55);
-  margin: 0.6rem 0 0;
+@keyframes nebula-spin {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
 }
 
 /* ── Carousel ──────────────────────────────────────────────────────── */
 .nav-hub__carousel {
-  --hub-gap: clamp(160px, 28vw, 320px);
+  --hub-gap: clamp(80px, 12vw, 150px);
+  /* Tighter gap since they fan outwards */
   position: relative;
   width: 100%;
   height: 100%;
@@ -74,82 +85,127 @@
 /* ── Card ──────────────────────────────────────────────────────────── */
 .nav-hub__card {
   position: absolute;
+  /* Pivot rotation from far below the actual cards */
+  transform-origin: 50% 160%;
   transform:
-    translateX(calc(var(--offset) * var(--hub-gap)))
-    translateZ(calc(var(--abs-offset) * -60px))
-    rotateY(calc(var(--offset) * -4deg))
-    scale(var(--card-scale));
+    translateX(calc(var(--offset) * var(--hub-gap))) translateY(calc(var(--abs-offset) * 35px)) translateZ(calc(var(--abs-offset) * -30px)) rotateZ(calc(var(--offset) * 14deg)) scale(var(--card-scale));
   opacity: var(--card-opacity);
   transition:
-    transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1),
-    opacity 0.4s ease;
+    transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1),
+    /* Elastic spring snap */
+    opacity 0.6s ease,
+    filter 0.6s ease;
   cursor: pointer;
   will-change: transform, opacity;
 }
 
 .nav-hub__card--active {
   cursor: pointer;
+  z-index: 20 !important;
+  animation: float-idle-fan 4s ease-in-out infinite alternate;
+}
+
+.nav-hub__card:not(.nav-hub__card--active):hover {
+  filter: brightness(1.3) drop-shadow(0 0 15px rgba(255, 255, 255, 0.1));
+  /* Hover effect: cards pull up out of the arc and straighten slightly */
+  transform:
+    translateX(calc(var(--offset) * var(--hub-gap))) translateY(calc(var(--abs-offset) * 35px - 30px)) translateZ(calc(var(--abs-offset) * -20px)) rotateZ(calc(var(--offset) * 10deg)) scale(calc(var(--card-scale) * 1.05));
+}
+
+@keyframes float-idle-fan {
+  0% {
+    transform: translateY(0px) rotateZ(0deg) scale(1);
+  }
+
+  100% {
+    transform: translateY(-16px) rotateZ(0deg) scale(1);
+  }
 }
 
 /* Opening zoom animation */
 .nav-hub__card--opening {
-  animation: card-zoom-in 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: card-fan-open 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-@keyframes card-zoom-in {
+@keyframes card-fan-open {
   0% {
-    transform: translateX(0) translateZ(0) scale(1);
+    transform: translateY(0) scale(1);
     opacity: 1;
     filter: blur(0);
   }
+
   100% {
-    transform: translateX(0) translateZ(200px) scale(2.5);
+    transform: translateY(-80px) scale(3) translateZ(300px);
     opacity: 0;
-    filter: blur(12px);
+    filter: blur(16px);
   }
 }
 
 /* Return emerge animation */
 .nav-hub--returning .nav-hub__card {
-  animation: card-emerge 0.55s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: card-fan-emerge 0.6s cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
 
-@keyframes card-emerge {
+@keyframes card-fan-emerge {
   0% {
     opacity: 0;
-    filter: blur(8px);
+    filter: blur(12px);
   }
+
   100% {
     opacity: var(--card-opacity);
     filter: blur(0);
   }
 }
 
+
 /* Card inner structure */
+@property --border-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
 .nav-hub__card-border {
   position: absolute;
   inset: 0;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  border: 2px solid transparent;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02)) border-box;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: destination-out;
+  mask-composite: exclude;
   pointer-events: none;
   z-index: 4;
+  transition: all 0.5s ease;
 }
 
 .nav-hub__card--active .nav-hub__card-border {
-  border-color: var(--element-color);
-  box-shadow:
-    0 0 20px color-mix(in srgb, var(--element-color) 25%, transparent),
-    inset 0 0 20px color-mix(in srgb, var(--element-color) 8%, transparent);
-  transition: border-color 0.5s ease, box-shadow 0.5s ease;
+  background: conic-gradient(from var(--border-angle), transparent 20%, var(--element-color) 80%, transparent 100%) border-box;
+  animation: border-spin 4s linear infinite;
+  box-shadow: none;
+}
+
+@keyframes border-spin {
+  to {
+    --border-angle: 360deg;
+  }
 }
 
 .nav-hub__card-image-wrapper {
   position: absolute;
   inset: 0;
-  border-radius: 20px;
+  border-radius: 24px;
   overflow: hidden;
   z-index: 0;
-  background: #080814;
+  background: rgba(8, 8, 20, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .nav-hub__card-image {
@@ -167,56 +223,98 @@
 .nav-hub__card-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    to bottom,
-    rgba(5, 5, 15, 0.2) 0%,
-    rgba(5, 5, 15, 0.5) 40%,
-    rgba(5, 5, 15, 0.95) 100%
-  );
+  background: linear-gradient(to bottom,
+      rgba(5, 5, 15, 0.2) 0%,
+      rgba(5, 5, 15, 0.5) 40%,
+      rgba(5, 5, 15, 0.95) 100%);
   box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
   pointer-events: none;
 }
 
 .nav-hub__card-glow {
   position: absolute;
-  inset: -40px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--element-color) 12%, transparent) 0%,
-    transparent 70%
-  );
+  inset: -30px;
+  border-radius: 40px;
+  background: radial-gradient(circle,
+      color-mix(in srgb, var(--element-color) 50%, transparent) 0%,
+      transparent 65%);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.5s ease;
   z-index: -1;
+  filter: blur(25px);
+  mix-blend-mode: screen;
 }
 
 .nav-hub__card--active .nav-hub__card-glow {
   opacity: 1;
+  animation: pulse-glow 3s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-glow {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.6;
+    filter: blur(20px);
+  }
+
+  100% {
+    transform: scale(1.1);
+    opacity: 1;
+    filter: blur(35px);
+  }
 }
 
 .nav-hub__card-content {
   position: relative;
   z-index: 1;
-  width: clamp(200px, 52vw, 300px);
-  min-height: clamp(280px, 65vw, 420px);
-  padding: clamp(28px, 5vw, 48px) clamp(20px, 4vw, 36px);
+  width: clamp(260px, 60vw, 380px);
+  min-height: clamp(360px, 75vw, 540px);
+  padding: clamp(32px, 5vw, 56px) clamp(24px, 4vw, 40px);
   background: transparent;
-  border-radius: 20px;
+  border-radius: 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   gap: clamp(8px, 2vw, 16px);
+  overflow: hidden;
+}
+
+/* Cosmic sweep animation inner */
+.nav-hub__card--active .nav-hub__card-content::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(130deg, transparent 20%, rgba(255, 255, 255, 0.05) 50%, transparent 80%);
+  background-size: 200% 200%;
+  animation: holo-sweep 4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+  /* Add subtle shadow inside for depth */
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes holo-sweep {
+  0% {
+    background-position: 200% 200%;
+  }
+
+  50% {
+    background-position: -50% -50%;
+  }
+
+  100% {
+    background-position: 200% 200%;
+  }
 }
 
 .nav-hub__card-icon {
   font-size: clamp(1.8rem, 4vw, 2.6rem);
   line-height: 1;
   color: var(--element-color);
-  filter: drop-shadow(0 0 8px var(--element-color)) drop-shadow(0 2px 4px rgba(0,0,0,0.8));
+  filter: drop-shadow(0 0 8px var(--element-color)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
 }
 
 .nav-hub__card-label {
@@ -260,13 +358,27 @@
 }
 
 @keyframes hint-bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 @keyframes hint-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
+
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
 }
 
 /* ── Dot indicators ────────────────────────────────────────────────── */
@@ -356,12 +468,12 @@
 /* Desktop: wider cards, show arrows, hide gesture hint */
 @media (min-width: 768px) {
   .nav-hub__carousel {
-    --hub-gap: clamp(260px, 24vw, 360px);
+    --hub-gap: clamp(280px, 28vw, 420px);
   }
 
   .nav-hub__card-content {
-    width: clamp(260px, 22vw, 340px);
-    padding: clamp(36px, 3vw, 56px) clamp(28px, 2.5vw, 44px);
+    width: clamp(360px, 30vw, 460px);
+    padding: clamp(48px, 4vw, 64px) clamp(36px, 3vw, 50px);
   }
 
   .nav-hub__arrow {
@@ -378,6 +490,6 @@
 /* Large desktop */
 @media (min-width: 1200px) {
   .nav-hub__carousel {
-    --hub-gap: clamp(300px, 22vw, 400px);
+    --hub-gap: clamp(360px, 26vw, 480px);
   }
 }
